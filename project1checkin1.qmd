@@ -1,0 +1,38 @@
+---
+title: "Project Check Point 1"
+author: "Will Mathewson"
+format: html
+editor: visual
+---
+
+## Context of the Data
+
+This dataset comes from Break Free From Plastic (BFFP), an initiative that conducts brand audits to track the sources of plastic pollution. This specific dataset was compiled and cleaned by Sarah Sauve, who became involved through the Social Justice Cooperative of Newfoundland and Labrador’s Zero Waste Action Team. The dataset includes global audit data from 2019 and 2020, which were originally distributed across many separate CSV files.
+
+## Data Cleaning
+
+The raw data required a lot of cleaning before it could be analyzed. Firstly the original dataset consisted of several separate CSV files with inconsistent formats across countries so Sauve had to fix them each individually before combining them. Some of the files were missing columns for certain plastic types, so these columns needed to be added and filled with zeros to ensure consistency. In addition, country names were not always included in the data and had to be extracted from file names manually. There were also some rows that represented totals that had to be removed to avoid double counting. Some variables also needed to be renamed to ensure consistency between the 2019 and 2020 data. Sauve also had to adjust some of the data types, as character values were occasionally misrepresented as numeric. After cleaning each year separately, the files were finally combined into a single dataset. Lastly, missing values were "handled appropriately", and the dataset was structured in long format to support future analysis and visualization.
+
+## Research Questions
+
+### Questions using this dataset
+
+1.  Was there a notable difference in pollution from 2019 to 2020 (due to COVID)?
+
+2.  Do more cleanup events/volunteers lead to higher recorded plastic totals?
+
+### Questions using supplemental data
+
+1.  Does GDP per capita have any influence on the amount of waste generated?
+
+2.  Do countries with higher GDP per capita's generate most of their waste from a different kind of plastic than countries with a lower GDP per capita?
+
+## Visualization Sketches
+
+### Visualization 1: 2019 vs 2020 Pollution
+
+[https://excalidraw.com/#json=o20GLEVaKtByxfR3aZVUc,RHPzD6I-AmQPHbeZ7lUxmg](https://excalidraw.com/#json=wbNyYv1ml00tjTC-SZ9YD,WaNdQKDdYhtKwWubDPiz2Q)
+
+### Visualization 2: GDP Per Capita vs Pollution
+
+<https://excalidraw.com/#json=xnrdJOPaJD6hip2ewk9sI,H1qxAEF4VgzEnb4U6uLrFQ>
