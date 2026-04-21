@@ -1,38 +1,309 @@
 ---
-title: "Project Check Point 1"
-author: "Will Mathewson"
+title: "Project1 Draft"
 format: html
 editor: visual
 ---
 
-## Context of the Data
+```{r}
+library(tidyverse)
+library(httr)
+library(jsonlite)
+library(tidyjson)
+library(glue)
+library(countrycode)
+```
 
-This dataset comes from Break Free From Plastic (BFFP), an initiative that conducts brand audits to track the sources of plastic pollution. This specific dataset was compiled and cleaned by Sarah Sauve, who became involved through the Social Justice Cooperative of Newfoundland and Labrador’s Zero Waste Action Team. The dataset includes global audit data from 2019 and 2020, which were originally distributed across many separate CSV files.
+```{r}
+plastics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-01-26/plastics.csv')
+```
 
-## Data Cleaning
+## Context
 
-The raw data required a lot of cleaning before it could be analyzed. Firstly the original dataset consisted of several separate CSV files with inconsistent formats across countries so Sauve had to fix them each individually before combining them. Some of the files were missing columns for certain plastic types, so these columns needed to be added and filled with zeros to ensure consistency. In addition, country names were not always included in the data and had to be extracted from file names manually. There were also some rows that represented totals that had to be removed to avoid double counting. Some variables also needed to be renamed to ensure consistency between the 2019 and 2020 data. Sauve also had to adjust some of the data types, as character values were occasionally misrepresented as numeric. After cleaning each year separately, the files were finally combined into a single dataset. Lastly, missing values were "handled appropriately", and the dataset was structured in long format to support future analysis and visualization.
+This data set was independently gathered by an individual in order to contribute to the global audit that the Break Free from Plastic organization holds each year. They collected data in their own town of St. John in Newfoundland. The dataset has information on the amount of different plastic waste (polyester, PVC, polyethylene, etc...) as well as the grand total of all plastic types, number of counting events, and number of volunteers at each cleanup.
 
-## Research Questions
+## Data Cleaning:
 
-### Questions using this dataset
+From the included code on the data set, we can see that they have already taken measures to clean the data. It appears that most of the cleaning is making sure that each variable is the correct type as well as renaming columns and fixing all the numeric values.
 
-1.  Was there a notable difference in pollution from 2019 to 2020 (due to COVID)?
+## Research Questions w/ Data:
 
-2.  Do more cleanup events/volunteers lead to higher recorded plastic totals?
+-   Does the mean average of plastic waste per count event differ between each plastic type?
 
-### Questions using supplemental data
+-   Does the overall plastic waste differ between 2019 and 2020?
 
-1.  Does GDP per capita have any influence on the amount of waste generated?
+## Research Questions w/ Supplemental Data:
 
-2.  Do countries with higher GDP per capitas generate most of their waste from a different kind of plastic than countries with a lower GDP per capita?
+-   Do richer countries generate more plastic waste per person?
 
-## Visualization Sketches
+-   Did the COVID-19 lockdown in 2020 affect plastic waste pollution in the same way it affected CO2 emissions?
 
-### Visualization 1: 2019 vs 2020 Pollution
+## Potential Visualizations:
 
-[https://excalidraw.com/#json=o20GLEVaKtByxfR3aZVUc,RHPzD6I-AmQPHbeZ7lUxmg](https://excalidraw.com/#json=wbNyYv1ml00tjTC-SZ9YD,WaNdQKDdYhtKwWubDPiz2Q)
+-   <https://excalidraw.com/#json=VqbcZ1Dds7wym3M6Ux9X5,LvRZ1Q5smV5xQozI1HNt0w>
 
-### Visualization 2: GDP Per Capita vs Pollution
+## Check In 2:
 
-<https://excalidraw.com/#json=xnrdJOPaJD6hip2ewk9sI,H1qxAEF4VgzEnb4U6uLrFQ>
+## Data Summary 1:
+
+How much waste is collected per volunteer change over time?
+
+```{r}
+waste_per_volunteer <- plastics |>
+  mutate(
+    waste_per_volunteer = grand_total / volunteers
+  ) |>
+  group_by(year) |>
+  summarise(
+    avg_waste_per_volunteer = mean(waste_per_volunteer, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+waste_per_volunteer
+```
+
+## Data Summary 2:
+
+How much waste is collected per cleanup event over time?
+
+```{r}
+waste_per_event_summary <- function(data) {
+  data |>
+    mutate(
+      waste_per_event = grand_total / num_events
+    ) |>
+    group_by(year) |>
+    summarise(
+      avg_waste_per_event = mean(waste_per_event, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+
+waste_per_event_summary(plastics)
+```
+
+## Data Summary 3:
+
+Which parent companies contributed the most volunteers across both years?
+
+```{r}
+total_company_volunteers <- function(company) {
+  plastics |>
+    filter(parent_company == company) |>
+    summarise(total_volunteers = sum(volunteers, na.rm = TRUE)) |>
+    pull(total_volunteers)
+}
+
+plastics |>
+  filter(!parent_company %in% c("Grand Total", "null", "NULL", "Unbranded")) |>
+  distinct(parent_company) |>
+  mutate(
+    total_volunteers = map_dbl(parent_company, total_company_volunteers)
+  ) |>
+  slice_max(total_volunteers, n = 10)
+```
+
+## Data Summary 4:
+
+Which parent companies are responsible for the most total plastic waste?
+
+```{r}
+top_companies <- plastics |>
+  filter(!parent_company %in% c("Grand Total", "null", "NULL", "Unbranded")) |>
+  group_by(parent_company) |>
+  summarise(
+    total_waste = sum(grand_total, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  slice_max(total_waste, n = 10) |>
+  pull(parent_company)
+
+map_dfr(top_companies, ~ {
+  plastics |>
+    filter(parent_company == .x) |>
+    summarise(
+      total_waste = sum(grand_total, na.rm = TRUE)
+    ) |>
+    mutate(parent_company = .x)
+})
+```
+
+## Check-In 3:
+
+```{r}
+#renaming countries in my dataset to have ISO-2 codes that our API uses
+plastics <- plastics %>% 
+  filter(country != "EMPTY") %>% 
+  mutate(iso2 = countrycode(country, 
+                            origin = "country.name", 
+                            destination = "iso2c"))
+
+iso2_list <- unique(plastics$iso2)
+iso2_list <- iso2_list[iso2_list != "TW"]
+```
+
+```{r}
+#| eval: false
+#testing API for one country gdp
+
+us_url <- "https://api.worldbank.org/v2/country/US/indicator/NY.GDP.MKTP.CD?format=json"
+
+us_data <- fromJSON(us_url)
+
+us_gdp <- us_data[[2]]
+```
+
+```{r}
+#| label: GDP Function
+get_gdp <- function(iso2) {
+  
+  url <- glue("https://api.worldbank.org/v2/country/{iso2}/indicator/NY.GDP.MKTP.CD?format=json")
+  
+  my_data <- fromJSON(url)
+  
+  if(is.null(my_data[[2]])){
+    return(NULL)
+  } else{
+    return(my_data[[2]] %>% 
+             filter(date %in% c("2019","2020")) %>% 
+             select(date, value) %>% 
+             mutate(iso2c = iso2,
+                    value = value/1e9) %>% 
+             rename(gdp_billions = value))
+  }
+}
+
+get_gdp("AU")
+
+gdp_data <- map_dfr(iso2_list, get_gdp)
+```
+
+```{r}
+#| eval: false
+#Testing API for one country population
+
+us_url <- "https://api.worldbank.org/v2/country/US/indicator/SP.POP.TOTL?format=json"
+
+us_data <- fromJSON(us_url)
+
+us_pop <- us_data[[2]]
+```
+
+```{r}
+get_population <- function(iso2) {
+  
+  url <- glue("https://api.worldbank.org/v2/country/{iso2}/indicator/SP.POP.TOTL?format=json")
+  
+  my_data <- fromJSON(url)
+  
+  if(is.null(my_data[[2]])) {
+    return(NULL)
+  } else {
+    return(my_data[[2]] %>% 
+             filter(date %in% c("2019","2020")) %>%
+             select(date, value) %>% 
+             mutate(iso2c = iso2))
+  }
+}
+
+get_population("AU")
+
+population_data <- map_dfr(iso2_list, get_population)
+```
+
+
+
+#External CO2 data
+```{r}
+co2 <- readr::read_csv(
+  "https://raw.githubusercontent.com/owid/co2-data/master/owid-co2-data.csv")
+```
+
+#For our first supplemental dataset, we cited the World Bank API to gather data on both GDP and population. We figured this data would be necessary if we wanted to find out how plastic waste relates to the size of a countries population and/or economy.
+
+#For the second dataset we found it from a website called "Our World in Data" and it contains a lot of information on different types of emissions, but in order to keep it less messy we decided to focus exclusively on the CO2 emissions and wanted to see if there was a relationship between the two.
+
+```{r}
+#| label: Meta Data Creation
+
+co2_sm <- co2 %>%
+  filter(year %in% c(2019, 2020))
+
+co2_sm <- co2_sm %>%
+  mutate(iso2 = countrycode(iso_code, "iso3c", "iso2c"))
+
+gdp_data <- gdp_data %>%
+  mutate(date = as.numeric(date))
+
+population_data <- population_data %>%
+  mutate(date = as.numeric(date))
+
+meta_set <- plastics %>%
+  left_join(gdp_data, by = c("iso2" = "iso2c", "year" = "date")) %>%
+  left_join(population_data, by = c("iso2" = "iso2c", "year" = "date")) %>%
+  left_join(co2_sm, by = c("iso2", "year"))
+```
+
+```{r}
+graph1 <- meta_set %>%
+  filter(year == 2019, parent_company == "Grand Total")
+
+graph1 <- graph1 %>%
+  mutate(
+    gdp_per_capita = gdp / population,
+    plastic_waste_per_capita = grand_total / population
+  )
+
+ggplot(graph1, aes(x = gdp_per_capita, y = plastic_waste_per_capita)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "GDP per Capita vs Plastic Waste per Capita (2019)",
+    x = "GDP per capita",
+    y = "Plastic items per capita"
+  )
+```
+
+```{r}
+#| label: Affect of COVID on Plastic Waste vs CO2 Emissions
+
+meta_set <- meta_set %>%
+  mutate(
+    parent_company = ifelse(
+      parent_company %in% c("NULL", "null"),
+      "Grand Total",
+      parent_company
+    )
+  )
+
+
+co2_change <- co2 %>%
+  filter(year %in% c(2019, 2020),
+         country == "World") %>%
+  summarise(
+    pct_change = (co2_per_capita[year == 2020] - co2_per_capita[year == 2019]) /
+                 co2_per_capita[year == 2019] * 100
+  )
+
+plastic_data <- meta_set %>%
+  filter(parent_company == "Grand Total") %>%
+  group_by(year) %>%
+  summarise(
+    total_plastic = sum(grand_total),
+    total_population = sum(population),
+    per_capita = total_plastic / total_population
+  )
+
+plastic_change <- plastic_data %>%
+  summarise(
+    pct_change = (per_capita[year == 2020] - per_capita[year == 2019]) /
+                 per_capita[year == 2019] * 100
+  )
+
+summary_table<- tibble(
+  waste_metric = c("CO2 per capita", "Plastic per capita"),
+  percentage_change = c(co2_change$pct_change,
+                 plastic_change$pct_change)
+)
+
+summary_table
+```
