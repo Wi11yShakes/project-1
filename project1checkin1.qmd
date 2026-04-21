@@ -25,7 +25,7 @@ The raw data required a lot of cleaning before it could be analyzed. Firstly the
 
 1.  Does GDP per capita have any influence on the amount of waste generated?
 
-2.  Do countries with higher GDP per capita's generate most of their waste from a different kind of plastic than countries with a lower GDP per capita?
+2.  Do countries with higher GDP per capitas generate most of their waste from a different kind of plastic than countries with a lower GDP per capita?
 
 ## Visualization Sketches
 
