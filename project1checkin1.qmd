@@ -11,6 +11,10 @@ library(jsonlite)
 library(tidyjson)
 library(glue)
 library(countrycode)
+library(gt)
+library(hrbrthemes)
+library(viridis)
+library(hexbin)
 ```
 
 ```{r}
@@ -27,19 +31,19 @@ From the included code on the data set, we can see that they have already taken 
 
 ## Research Questions w/ Data:
 
--   Does the mean average of plastic waste per count event differ between each plastic type?
+- Does the mean average of plastic waste per count event differ between each plastic type?
 
--   Does the overall plastic waste differ between 2019 and 2020?
+- Does the overall plastic waste differ between 2019 and 2020?
 
 ## Research Questions w/ Supplemental Data:
 
--   Do richer countries generate more plastic waste per person?
+- Do richer countries generate more plastic waste per person?
 
--   Did the COVID-19 lockdown in 2020 affect plastic waste pollution in the same way it affected CO2 emissions?
+- Did the COVID-19 lockdown in 2020 affect plastic waste pollution in the same way it affected CO2 emissions?
 
 ## Potential Visualizations:
 
--   <https://excalidraw.com/#json=VqbcZ1Dds7wym3M6Ux9X5,LvRZ1Q5smV5xQozI1HNt0w>
+- <https://excalidraw.com/#json=VqbcZ1Dds7wym3M6Ux9X5,LvRZ1Q5smV5xQozI1HNt0w>
 
 ## Check In 2:
 
@@ -210,17 +214,16 @@ get_population("AU")
 population_data <- map_dfr(iso2_list, get_population)
 ```
 
+# External CO2 data
 
-
-#External CO2 data
 ```{r}
 co2 <- readr::read_csv(
   "https://raw.githubusercontent.com/owid/co2-data/master/owid-co2-data.csv")
 ```
 
-#For our first supplemental dataset, we cited the World Bank API to gather data on both GDP and population. We figured this data would be necessary if we wanted to find out how plastic waste relates to the size of a countries population and/or economy.
+For our first supplemental dataset, we cited the World Bank API to gather data on both GDP and population. We figured this data would be necessary if we wanted to find out how plastic waste relates to the size of a countries population and/or economy.
 
-#For the second dataset we found it from a website called "Our World in Data" and it contains a lot of information on different types of emissions, but in order to keep it less messy we decided to focus exclusively on the CO2 emissions and wanted to see if there was a relationship between the two.
+For the second dataset we found it from a website called "Our World in Data" and it contains a lot of information on different types of emissions, but in order to keep it less messy we decided to focus exclusively on the CO2 emissions and wanted to see if there was a relationship between the two.
 
 ```{r}
 #| label: Meta Data Creation
@@ -249,7 +252,7 @@ graph1 <- meta_set %>%
 
 graph1 <- graph1 %>%
   mutate(
-    gdp_per_capita = gdp / population,
+    gdp_per_capita = gdp_billions * 1,000,000,000 / population,
     plastic_waste_per_capita = grand_total / population
   )
 
@@ -260,7 +263,9 @@ ggplot(graph1, aes(x = gdp_per_capita, y = plastic_waste_per_capita)) +
     title = "GDP per Capita vs Plastic Waste per Capita (2019)",
     x = "GDP per capita",
     y = "Plastic items per capita"
-  )
+  ) +
+  scale_x_log10() +
+  scale_y_log10()
 ```
 
 ```{r}
@@ -307,3 +312,107 @@ summary_table<- tibble(
 
 summary_table
 ```
+
+We removed Taiwan from the analysis since there was no api data for Taiwan, therefore we removed Taiwan from the gdp and CO2 emissions.
+
+## Check-in 4:
+
+```{r}
+#| label: Statistical Model
+
+model_data <- meta_set %>%
+  filter(year == 2019, parent_company == "Grand Total") %>%
+  mutate(
+    gdp_per_capita = gdp_billions * 1e9 / population,
+    plastic_waste_per_capita = grand_total / population
+  )
+
+model <- lm(plastic_waste_per_capita ~ gdp_per_capita, data = model_data)
+
+model_table <- summary(model)$coefficients %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("term") %>%
+  mutate(
+    term = recode(term,
+      `(Intercept)` = "Intercept",
+      gdp_per_capita = "GDP Per Capita"
+    )
+  )
+
+model_table %>%
+  gt() %>%
+  cols_label(
+    term = "Variable",
+    Estimate = "Estimate",
+    `Std. Error` = "Std. Error",
+    `t value` = "t-value",
+    `Pr(>|t|)` = "p-value"
+  ) %>%
+  fmt_number(
+    columns = c(Estimate, `Std. Error`, `t value`, `Pr(>|t|)`),
+    decimals = 4
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) %>%
+  tab_header(
+    title = md("**Regression Results: GDP vs Plastic Waste**"),
+    subtitle = md("Linear Model for 2019 Per Capita Data")
+  ) %>%
+  tab_caption(
+    md("Table 1: Linear regression examining the relationship between GDP per capita and plastic waste per capita in 2019.")
+  )
+```
+
+The regression shows a positive relationship between GDP per capita and plastic waste per capita. This is suggested by the positive coefficient and implies that increases in GDP means an increase in plastic waste per capita, although the strength of the relationship is shown to be rather weak.
+
+```{r}
+#| warning: FALSE
+#| fig-alt: "Bubbleplot showing the GDP per Capita vs CO2 Emission Per Capita for 51 countries. The size of the bubble shows the relative size of the respective countries population. The color of the bubble represents the relative level of that countries GDP. We see that countries with larger populations tend to have smaller GDP per Capita and lower CO2 Emissions Per Capita."
+model_data %>% 
+  arrange(desc(population)) %>% 
+  mutate(country.x = as.factor(country.x),
+         gdp_level = case_when(
+           is.na(gdp_billions) ~ "Other",
+           gdp_billions < 100 ~ "Low",
+           gdp_billions >= 100 & gdp_billions < 500 ~ "Lower-Mid",
+           gdp_billions >= 500 & gdp_billions < 1000 ~ "Upper-Mid",
+           gdp_billions >= 1000 ~ "High"
+         ),
+         gdp_level = factor(gdp_level,
+                            levels = c("Low","Lower-Mid","Upper-Mid","High","Other"))) %>% 
+  ggplot(aes(x = gdp_per_capita, y = co2_per_capita, size = population, color = gdp_level)) +
+    geom_point(alpha = 0.5) + 
+    scale_size(range = c(1,20), name = "Population(Millions)") +
+    scale_fill_viridis(discrete = TRUE, guide = FALSE, option = "A") + 
+  scale_x_log10() +
+scale_y_log10() +
+    theme_ft_rc() +
+  labs(
+    x = "GDP Per Capita (log scale)",
+    y = "CO2 Emissions Per Capita (log scale) ",
+    title = "Bubble Plot of GDP and CO2 Emissions Per Capita (log scaled) ",
+    subtitle = "By Population Size"
+  ) 
+
+```
+
+```{r}
+#| warning: FALSE
+#| fig-alt: " Hex plot showing plastic waste per capita on the x-axis and CO2 emissions per capita on the y-axis for 51 countries in 2019, both on log scales. Most countries cluster around low to mid levels of plastic waste per capita. Countries with higher plastic waste per capita tend to also have higher CO2 emissions per capita, suggesting a weak positive correlation."
+
+ggplot(model_data, aes(x = plastic_waste_per_capita, y = co2_per_capita)) +
+  geom_hex(bins = 10) +
+  scale_x_log10() +
+  scale_y_log10() +
+  scale_fill_viridis_c(option = "C", name = "Countries") +
+  labs(
+    title = "Log Plastic Waste vs Log CO2 Emissions per Capita (2019)",
+    x = "Plastic Waste per Capita (log scale)",
+    y = "CO2 Emissions per Capita (log scale)"
+  ) +
+  theme_ft_rc()
+```
+
+The visualizations show the relationship between GDP and CO2 emissions, the regression model shows explicitly how GDP per capita can predict plastic waste per capita, giving us a way to quantify the relationship between the two groups.
